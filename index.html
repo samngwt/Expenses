@@ -680,4 +680,154 @@ function getPieData(){
   const src=chartScope==="monthly"?state.expenses.filter(e=>toMonthKey(e.date)===filterMonth):state.expenses;
   const ess=src.filter(e=>getCategoryType(e.category)==="essential").reduce((s,e)=>s+e.amount,0);
   const non=src.filter(e=>getCategoryType(e.category)==="nonEssential").reduce((s,e)=>s+e.amount,0);
-  return
+  return [{label:"Essential",value:ess,color:"#3b82f6"},{label:"Non-Essential",value:non,color:"#f3a738"}].filter(d=>d.value>0);
+}
+
+function buildPieCard(pd){
+  const card=h("div",{class:"card",style:{marginBottom:"14px"}});
+  card.appendChild(h("div",{style:{fontSize:"13px",fontWeight:"700",color:"#a7a5b8",marginBottom:"14px"}},"Essential vs Non-Essential"));
+  const cv=h("canvas",{width:"300",height:"210"});
+  card.appendChild(cv);
+  requestAnimationFrame(()=>{
+    const W=cv.offsetWidth||300,H=210;
+    cv.width=W; cv.height=H;
+    const ctx=cv.getContext("2d");
+    const total=pd.reduce((s,d)=>s+d.value,0);
+    let angle=-Math.PI/2;
+    const cx=W/2,cy=H/2-10,r=Math.min(cx,cy)-25;
+    pd.forEach(d=>{
+      const slice=(d.value/total)*Math.PI*2;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,angle,angle+slice); ctx.closePath();
+      ctx.fillStyle=d.color; ctx.fill();
+      const mid=angle+slice/2;
+      ctx.fillStyle="#fff"; ctx.font="bold 12px Inter,sans-serif"; ctx.textAlign="center";
+      ctx.fillText(Math.round(d.value/total*100)+"%",cx+Math.cos(mid)*r*.65,cy+Math.sin(mid)*r*.65+5);
+      angle+=slice;
+    });
+    pd.forEach((d,i)=>{
+      const ly=H-22+i*16;
+      ctx.fillStyle=d.color; ctx.fillRect(W/2-65,ly,12,10);
+      ctx.fillStyle="#a7a5b8"; ctx.font="11px Inter,sans-serif"; ctx.textAlign="left";
+      ctx.fillText(d.label+" ("+fmt(d.value)+")",W/2-49,ly+10);
+    });
+  });
+  return card;
+}
+
+function buildCatCard(){
+  const src=chartScope==="monthly"?state.expenses.filter(e=>toMonthKey(e.date)===filterMonth):state.expenses;
+  const cats={};
+  src.forEach(e=>{ cats[e.category]=(cats[e.category]||0)+e.amount; });
+  const data=Object.entries(cats).map(([n,v])=>({n,v})).sort((a,b)=>b.v-a.v).slice(0,10);
+  if(!data.length) return h("div",null);
+  const card=h("div",{class:"card"});
+  card.appendChild(h("div",{style:{fontSize:"13px",fontWeight:"700",color:"#a7a5b8",marginBottom:"14px"}},
+    "Category Breakdown — "+(chartScope==="monthly"?monthFromKey(filterMonth):"All Time")
+  ));
+  const rowH=40,H=data.length*rowH+20;
+  const cv=h("canvas",{width:"460",height:String(H)});
+  card.appendChild(cv);
+  requestAnimationFrame(()=>{
+    const W=cv.offsetWidth||460;
+    cv.width=W; cv.height=H;
+    const ctx=cv.getContext("2d");
+    const lW=118,pad=8,barArea=W-lW-pad-55;
+    const maxV=data[0].v||1;
+    let ei=0,ni=0;
+    data.forEach((d,i)=>{
+      const y=i*rowH+10;
+      const isE=getCategoryType(d.n)==="essential";
+      const color=isE?ESS_COLORS[ei++%ESS_COLORS.length]:NON_COLORS[ni++%NON_COLORS.length];
+      const bW=Math.max((d.v/maxV)*barArea,4);
+      ctx.fillStyle="#a7a5b8"; ctx.font="12px Inter,sans-serif"; ctx.textAlign="right";
+      ctx.fillText(d.n.length>13?d.n.slice(0,13)+"…":d.n,lW,y+18);
+      ctx.fillStyle=color; ctx.beginPath(); rr(ctx,lW+pad,y+5,bW,22,4); ctx.fill();
+      ctx.fillStyle="#fffffe"; ctx.font="11px Inter,sans-serif"; ctx.textAlign="left";
+      ctx.fillText(fmt(d.v),lW+pad+bW+5,y+20);
+    });
+  });
+  return card;
+}
+
+// ── Voice Input Mapping ─────────────────────────────────────────
+const CAT_KEYWORDS={
+  "housing":["🏠 Housing"],"rent":["🏠 Housing"],"mortgage":["🏠 Housing"],
+  "groceries":["🛒 Groceries"],"grocery":["🛒 Groceries"],"supermarket":["🛒 Groceries"],
+  "transport":["🚗 Transport"],"grab":["🚗 Transport"],"bus":["🚗 Transport"],"mrt":["🚗 Transport"],"petrol":["🚗 Transport"],"fuel":["🚗 Transport"],
+  "health":["💊 Health"],"doctor":["💊 Health"],"medicine":["💊 Health"],"pharmacy":["💊 Health"],
+  "utilities":["💡 Utilities"],"electric":["💡 Utilities"],"water":["💡 Utilities"],"internet":["💡 Utilities"],
+  "education":["🎓 Education"],"school":["🎓 Education"],"tuition":["🎓 Education"],
+  "dining":["🍽️ Dining Out"],"restaurant":["🍽️ Dining Out"],"food":["🍽️ Dining Out"],"lunch":["🍽️ Dining Out"],"dinner":["🍽️ Dining Out"],"breakfast":["🍽️ Dining Out"],"cafe":["🍽️ Dining Out"],
+  "entertainment":["🎬 Entertainment"],"movie":["🎬 Entertainment"],"cinema":["🎬 Entertainment"],"netflix":["🎬 Entertainment"],
+  "clothing":["👗 Clothing"],"clothes":["👗 Clothing"],"shoes":["👗 Clothing"],
+  "travel":["✈️ Travel"],"flight":["✈️ Travel"],"hotel":["✈️ Travel"],"holiday":["✈️ Travel"],
+  "gift":["🎁 Gifts"],"gifts":["🎁 Gifts"],"present":["🎁 Gifts"],
+  "shopping":["🛍️ Shopping"],"mall":["🛍️ Shopping"],"online":["🛍️ Shopping"]
+};
+
+function handleVoice(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ showToast("Voice not supported in this browser",true); return; }
+  if(!window.isSecureContext){ showToast("🔒 Voice requires HTTPS — host on GitHub first",true); return; }
+  if(recognizing) return;
+
+  const rec=new SR();
+  rec.continuous=false; rec.interimResults=false; rec.maxAlternatives=3; rec.lang="en-US";
+
+  recognizing=true;
+  const vb=document.querySelector(".btn-voice");
+  if(vb){ vb.classList.add("listening"); vb.textContent="🔴"; }
+  showToast("🎤 Listening — speak now…");
+  rec.start();
+
+  rec.onresult=(event)=>{
+    let best="",bestConf=0;
+    for(let i=0;i<event.results[0].length;i++){
+      if(event.results[0][i].confidence>bestConf){ bestConf=event.results[0][i].confidence; best=event.results[0][i].transcript; }
+    }
+    parseVoice(best);
+  };
+  rec.onerror=(e)=>{
+    recognizing=false;
+    if(vb){ vb.classList.remove("listening"); vb.textContent="🎤"; }
+    if(e.error==="aborted"||e.error==="no-speech"){ showToast("No speech detected — try again",true); return; }
+    if(e.error==="not-allowed"){ showToast("🎤 Microphone access denied",true); return; }
+    showToast("Voice error: "+e.error,true);
+  };
+  rec.onend=()=>{ recognizing=false; if(vb){ vb.classList.remove("listening"); vb.textContent="🎤"; } };
+}
+
+function parseVoice(text){
+  if(!text){ showToast("Didn't catch that — try again",true); return; }
+  const lower=text.toLowerCase();
+  const numMatch=lower.match(/(\d+(?:[.,]\d+)?)/);
+  let amt=numMatch?numMatch[1].replace(",","."):"";
+  let matchedCat="";
+  
+  const allAvailableCats = [...(state.categories.essential||[]), ...(state.categories.nonEssential||[])];
+  for(const kw of Object.keys(CAT_KEYWORDS)){
+    if(lower.includes(kw)){
+      const target=CAT_KEYWORDS[kw][0];
+      if(allAvailableCats.includes(target)){ matchedCat=target; break; }
+    }
+  }
+  let name=text;
+  if(numMatch) name=name.replace(numMatch[0],"");
+  name=name.replace(/\b(dollars?|ringgit|rm|sgd|usd)\b/gi,"").replace(/\s+/g," ").trim();
+
+  if(amt){ const a=document.getElementById("inp-amount"); if(a) a.value=amt; }
+  if(matchedCat){ const s=document.getElementById("inp-cat"); if(s){ s.value=matchedCat; lastCategory=matchedCat; save(); } }
+  if(name){ const n=document.getElementById("inp-name"); if(n) n.value=name; }
+  showToast("🎤 Heard: \""+text+"\"");
+}
+
+// ── PWA Install ───────────────────────────────────────────────
+window.addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); installEvt=e; document.getElementById("installWrap").style.display="block"; });
+function doInstall(){ if(!installEvt) return; installEvt.prompt(); installEvt.userChoice.then(r=>{ if(r.outcome==="accepted") document.getElementById("installWrap").style.display="none"; }); }
+
+// ── Boot ──────────────────────────────────────────────────────
+load();
+render();
+</script>
+</body>
+</html>
