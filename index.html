@@ -81,11 +81,18 @@ canvas{max-width:100%}
 
 /* Rolling Date Picker Styles */
 .date-roller-container{display:flex;gap:6px;background:#1a1825;border:1.5px solid #2d2b3d;border-radius:12px;padding:4px;overflow:hidden}
-.date-wheel-wrapper{flex:1;position:relative;height:50px;overflow:hidden}
+.date-wheel-wrapper{flex:1;position:relative;height:50px;overflow:hidden;min-width:0}
 .date-wheel-wrapper select{
-  background:transparent;border:none;padding:0 24px 0 12px;height:100%;
-  text-align:center;font-size:14px;font-weight:500;color:#fffffe;
-  cursor:pointer;background-position:right 8px center;
+    background:transparent;
+  border:none;
+  padding:0 8px;
+  height:100%;
+  text-align:center;
+  font-size:12px;
+  font-weight:500;
+  color:#fffffe;
+  cursor:pointer;
+  background-position:right 4px center;
 }
 
 /* Edit Modal Layout */
@@ -255,9 +262,9 @@ function createDateRoller(idPrefix, initialValue, onChangeCallback) {
     onChangeCallback(dateStr);
   };
 
-  yearSel.onchange = handleWheelChange;
-  monthSel.onchange = handleWheelChange;
-  daySel.onchange = handleWheelChange;
+  yearSel.addEventListener("change", handleWheelChange);
+  monthSel.addEventListener("change", handleWheelChange);
+  daySel.addEventListener("change", handleWheelChange);
 
   return h("div", {class:"date-roller-container", id: idPrefix+"-roller"},
     h("div", {class:"date-wheel-wrapper"}, daySel),
