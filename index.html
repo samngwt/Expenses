@@ -243,14 +243,22 @@ function createDateRoller(idPrefix, initialValue, onChangeCallback) {
   });
 
   const daySel = h("select", {style:{paddingRight:"20px"}});
-  function updateDays() {
-    daySel.innerHTML = "";
-    const totalDays = new Date(selY, selM, 0).getDate();
-    if(selD > totalDays) selD = totalDays;
-    for(let d=1; d<=totalDays; d++) {
-      daySel.appendChild(h("option", d === selD ? {value:d, selected:"true"} : {value:d}, String(d).padStart(2,"0")));
+  function updateDays() {const currentDay = parseInt(daySel.value) || selD;
+  daySel.innerHTML = "";
+  const totalDays = new Date(selY, selM, 0).getDate();
+  selD = Math.min(currentDay, totalDays);
+  for(let d=1; d<=totalDays; d++) {
+    const opt = h(
+      "option",
+      { value:d },
+      String(d).padStart(2,"0")
+    );
+    if(d === selD) {
+      opt.selected = true;
     }
+    daySel.appendChild(opt);
   }
+}
   updateDays();
 
   const handleWheelChange = () => {
